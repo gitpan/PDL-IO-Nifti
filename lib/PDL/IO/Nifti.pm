@@ -17,7 +17,7 @@ use strict;
 #my $self;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
-our $VERSION='0.50';
+our $VERSION='0.51';
 # define hash;
 my %sizes=(
 	'c'=>1,
