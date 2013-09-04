@@ -7,7 +7,7 @@ use PDL;
 use PDL::IO::FlexRaw;
 #use Getopt::Tabular;
 #use Exporter;
-use Data::Dumper;
+#use Data::Dumper;
 use 5.10.0;
 #@ISA = qw(Exporter);
 #@EXPORT = qw(write_nii read_nii get_field set_field write_hdr read_hdr %template_nifti_header);
@@ -17,7 +17,8 @@ use strict;
 #my $self;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
-our $VERSION='0.52';
+my $byte_order='';
+our $VERSION='0.60';
 # define hash;
 my %sizes=(
 	'c'=>1,
@@ -141,20 +142,21 @@ sub new {
 	my $self=\%fields;
 	bless $self,$class;
 	for my $field (keys %fields) {
+		#say $field;
 		next if ($field =~/imag|force/); # list of special parameters.
 		$_farray[$fields{$field}->{nr}]=$field;
 	}
 	my $obj=shift;
-	if ($obj) { 
-		if (-f $obj) {
+	#if ($obj) { 
+		if (eval {$obj->nelem}) { # a piddle!
+			#print "assigning piddle ";
+			$self->img($obj) ; # loads image into imag.
+		} elsif (-f $obj) { # a valid file name !
 #			#print "opening file $obj";
 #			open my $file,$obj  or die "$obj cannot be read\n";
 			$self->read_nii($obj);
-		} elsif ($obj->nelem) {
-			#print "assigning piddle ";
-			$self->img($obj) ; # loads image into imag.
-		}
-	} 
+		} 	 
+	#}
 	#my $file=shift;
 	#$n_hdr{img}=pdl(null);
 	return $self;
@@ -216,25 +218,39 @@ sub read_hdr {
 	my $file=shift; # Ref to filehandle
 	binmode $file,':raw:';
 	my $str;
+	# determine byte order from dim[0] (max. 7)
+	seek $file,40,0;
+	my $o;
+	read $file,$o,2;
+	seek $file,0,0;
+	$o=unpack 's',$o;
+	die "No dimenison info $o" unless $o;
+	$byte_order='>' if ($o>8);
+	print "Dims: $o, byte order string: $byte_order\n";
 	#my %nifti=%template_nifti_header;
 	#read $file,$str,352;
 	my $pos=0;
 	for my $field (@_farray) {
 		#my $field=$_farray[$i];
-		#say "Field $field $nifti{$field} ";
 		my $c=int($fields{$field}->{count}||1)*($fields{$field}->{length}||1); # field counter in pack string
 		read $file,my $item,$sizes{$fields{$field}->{type}}*$c;
-		#say ("binary '$item', type ".($sizes{$nifti{$field}->{type}}) ," count " ,$c);
-		#say "unpack string: ",$self->{$field}{type}.$c;
-		#say ("val '",
-		#say (keys $fields{$field});
-		next if ($fields{$field}->{type} == '1');
+		#say ($fields{$field}->{type});
+		next if ($fields{$field}->{type} eq '1');
 		if ($fields{$field}->{count}>1) {
-			$self->set_field($field,[unpack ($fields{$field}->{type}.$c,$item)]);
-		} else {
-			$self->set_field($field,unpack ($fields{$field}->{type}.$c,$item));
-		}
+			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
+				$self->set_field($field,[unpack ($fields{$field}->{type}.$byte_order.$c,$item)]) ;
 		#say $pos," Field $field size $c: $item: ",unpack($self->{$field}->{type}.$c,$item)," ",$self->get_field($field);
+			} else {
+				$self->set_field($field,[unpack ($fields{$field}->{type}.$c,$item)]) ;
+			}
+		} else {
+			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
+				$self->set_field($field,unpack ($fields{$field}->{type}.$byte_order.$c,$item));
+		#say $pos," Field $field size $c: $item: ",unpack($self->{$field}->{type}.$c,$item)," ",$self->get_field($field);
+			} else {
+				$self->set_field($field,unpack ($fields{$field}->{type}.$c,$item)) ;
+			}
+		}
 		$pos+=$c*$sizes{$fields{$field}->{type}};
 		
 	}
@@ -294,7 +310,8 @@ sub write_nii {
 	$self->write_hdr($file);
 	seek ($file,$self->get_field('vox_offset'),0);
 	#say "Curr. pos.: ",tell($file);
-	my $d=Data::Dumper->new (writeflex ($file,$self->img));
+	#my $d=Data::Dumper->new (
+	writeflex ($file,$self->img);
 	#say ("Writeflex: ".$d->Dump);
 	#say "Curr. pos.: ",tell($file);
 	#print "bla\n";
@@ -322,7 +339,11 @@ sub read_nii {
 	
 	unless ($j) { # type is native, no conversion necessary
 		#say "Reading data now $type, $ndims, @$dims";
-		$self->img(readflex ($file,[{Type=>$type,Dims=>$dims}]));
+		if ($byte_order) {
+			$self->img(readflex ($file,[{Type=>'swap'},{Type=>$type,Dims=>$dims}]));
+		} else {
+			$self->img(readflex ($file,[{Type=>$type,Dims=>$dims}]));
+		}
 	} elsif ($j>=1) { # a remapping is necessary
 		#print "We convert now ! ",$self->get_field('datatype')."\n";
 		die "This conversion is not possible without data loss\n" if ($j==2 and !$fields{force});
@@ -335,7 +356,7 @@ sub read_nii {
 		die "Conversion from $l to $k not possible " unless ($k and $l);
 		for my $n (0..$its-1) {
 			read $file,$str,$buf or die "Could not read from $file $!\n";
-			$repacked.=pack($k.$buf,unpack($l.$buf,$str));
+			$repacked.=pack($k.$buf,unpack($l.$byte_order.$buf,$str));
 		}
 		$d->upd_data;
 		$self->img($d);
@@ -537,13 +558,15 @@ so far only used/tested internally, but may be useful. They pack and write or re
 
 =head1 BUGS/TODO
 
-At the moment, read_nii only of native PDL datatypes have been tested.
+At the moment, read_nii and write_nii have only been tested for native PDL datatypes.
 
-I guess a lot, this is the first alpha. It needs a lot of testing, still. 
+In case you get failures from read_nii/write_nii, try passing either a reference to an open filehandle or a filename. It tries to guess what argument has been given, but I'm not sure if it covers all cases. So far it was only tested on linux.
+
+Tests are still rudimentary, for the moment, noly reading is tested for.
 
 =head1 SEE ALSO
 
-http://nifti.nimh.nih.gov/pub/dist/src/niftilib/nifti1.h - the Nifti standard on which this module is based.
+http://nifti.nimh.nih.gov/nifti-1 - the Nifti standard on which this module is based.
 
 =head1 AUTHOR
 

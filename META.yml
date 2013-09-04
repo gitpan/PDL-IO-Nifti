@@ -3,11 +3,11 @@ abstract: 'Module to access imaging data using Nifti-1 standard'
 author:
   - 'Ingo Schmid <ingosch@gmx.at>'
 build_requires:
-  Test::More: 0
+  Test::Simple: 0
 configure_requires:
   ExtUtils::MakeMaker: 0
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.64, CPAN::Meta::Converter version 2.120921'
+generated_by: 'ExtUtils::MakeMaker version 6.72, CPAN::Meta::Converter version 2.132140'
 license: unknown
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -19,5 +19,5 @@ no_index:
     - inc
 requires:
   PDL: 2.4
-  perl: 5.006
-version: 0.52
+  perl: 0
+version: 0.60
