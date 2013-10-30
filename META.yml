@@ -20,4 +20,4 @@ no_index:
 requires:
   PDL: 2.004
   perl: 0
-version: 0.70
+version: 0.71

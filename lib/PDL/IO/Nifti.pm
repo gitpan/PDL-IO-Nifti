@@ -19,7 +19,7 @@ use strict;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
 my $byte_order='';
-our $VERSION='0.70';
+our $VERSION='0.71';
 # define hash;
 my %sizes=(
 	'c'=>1,
@@ -245,7 +245,7 @@ sub read_hdr {
 		read $file,my $item,$sizes{$fields{$field}->{type}}*$c;
 		#say ($fields{$field}->{type});
 		next if ($fields{$field}->{type} eq '1');
-		say "$field ,".$fields{$field}->{type};# if ($fields{$field}->{type} eq '1');
+		#say "$field ,".$fields{$field}->{type};# if ($fields{$field}->{type} eq '1');
 		if ($fields{$field}->{count}>1) {
 			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
 				$self->set_field($field,[unpack ($fields{$field}->{type}.$byte_order.$c,$item)]) ;
@@ -319,7 +319,7 @@ sub write_nii {
 	#say $self->{imag}->info;
 	$self->write_hdr($file);
 	seek ($file,$self->get_field('vox_offset'),0);
-	say "Curr. pos.: ",tell($file);
+	#say "Curr. pos.: ",tell($file);
 	#my $d=Data::Dumper->new (
 	writeflex ($file,$self);#->img);
 	#say ("Writeflex: ".$d->Dump);
@@ -342,7 +342,7 @@ sub read_nii {
 	#say "$dims, @$dims";
 	my $ndims=shift @{$dims};
 	#say "Dims @$dims";
-	say $self->get_field('datatype');
+	#say $self->get_field('datatype');
 	my ($type,$i,$j,$k,$l)=@{$_maptypes{$self->get_field('datatype')}};
 	#say "$type,$i,$j,$k,$l";
 	while (!$$dims[-1]) {pop @$dims;} # Remove trailing 0s to avoid 0-length dim in piddle
