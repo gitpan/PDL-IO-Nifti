@@ -4,7 +4,7 @@
       "Ingo Schmid <ingosch@gmx.at>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.72, CPAN::Meta::Converter version 2.132140",
+   "generated_by" : "ExtUtils::MakeMaker version 6.74, CPAN::Meta::Converter version 2.132510",
    "license" : [
       "unknown"
    ],
@@ -32,11 +32,11 @@
       },
       "runtime" : {
          "requires" : {
-            "PDL" : "2.4",
+            "PDL" : "2.004",
             "perl" : "0"
          }
       }
    },
    "release_status" : "stable",
-   "version" : "0.60"
+   "version" : "0.70"
 }

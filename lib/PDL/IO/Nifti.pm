@@ -1,8 +1,9 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 package PDL::IO::Nifti;
 
 
+use base PDL;
 use PDL;
 use PDL::IO::FlexRaw;
 #use Getopt::Tabular;
@@ -18,7 +19,7 @@ use strict;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
 my $byte_order='';
-our $VERSION='0.60';
+our $VERSION='0.70';
 # define hash;
 my %sizes=(
 	'c'=>1,
@@ -37,13 +38,13 @@ my %sizes=(
 my $force=0;
 
 my %_map_pdltypes = ( # nifti datatype numbers of native pdl types
-	0=>2, #'byte'=>2,
-	2=>256, #'ushort'=>256,
-	1=>4, #'short'=>4,
-	3=>8, #'long'=>8,
-	5=>16, #'float'=>16,
-	6=>64, #'double'=>64,
-	4=>1024, #'longlong'=>1024,
+	byte=>2, #'byte'=>2,
+	ushort=>256, #'ushort'=>256,
+	short=>4, #'short'=>4,
+	long=>8, #'long'=>8,
+	float=>16, #'float'=>16,
+	double=>64, #'double'=>64,
+	longlong=>1024, #'longlong'=>1024,
 );
 
 my %_bitsize = ( # bits per pixel
@@ -133,7 +134,7 @@ my %fields = ( # mapping NIFTI-1 usage, not ANALYZE
 	'intent_name'	=>	{nr=>41,type=>'a',length=>16 },
 	'magic'		=>	{nr=>42,type=>'a',length=>4,val=>"n+1"},
 	'extension'	=>	{nr=>43,type=>'c',count=>4,val=>[0,0,0,0],},
-	'imag'		=>	undef, # image data
+	#'imag'		=>	undef, # image data
 );
 
 sub new {
@@ -143,7 +144,7 @@ sub new {
 	bless $self,$class;
 	for my $field (keys %fields) {
 		#say $field;
-		next if ($field =~/imag|force/); # list of special parameters.
+		next if ($field =~/PDL|force/); # list of special parameters.
 		$_farray[$fields{$field}->{nr}]=$field;
 	}
 	my $obj=shift;
@@ -167,6 +168,7 @@ sub set_field {
 	my $field=shift;
 	my $val=shift; # either a scalar, or a arrayref when setting a list-like value. 
 	my $count=shift; # index if list values are to be set
+	#say "() setting $field to $val! ($count)";
 	if ($fields{$field}->{count}) {
 		warn "This field $field has only ".$fields{$field}->{count}."elements! 
 			Your assignment will be (partially) lost!"
@@ -187,6 +189,7 @@ sub set_field {
 sub get_field {		# sets a field in the header.
 	my $self=shift;
 	my $field=shift;
+	return \%fields unless $field; # You wanted all of it!!!
 	#$field=$self->n_hdr{$field};
 	#print "fields used are ".@{keys %fields} unless defined $field;
 	#my $val=shift;
@@ -201,16 +204,22 @@ sub get_field {		# sets a field in the header.
 
 sub img {
 	my $self=shift;
-	if (defined(my $pdl=shift)) {
-		warn "not a piddle" unless UNIVERSAL::isa($pdl, 'PDL');
-		$self->{imag}=$pdl;
-		$self->set_field ('datatype' , $_map_pdltypes{$self->{imag}->get_datatype});
-		$self->set_field ('bitpix' , $_bitsize{$self->{imag}->get_datatype});
-		$self->set_field ('dim',[$self->{imag}->ndims,$self->{imag}->dims]);
+	my $pdl=shift;
+	if (eval {$pdl->nelem}) { # a piddle!
+		barf "not a piddle" unless UNIVERSAL::isa($pdl, 'PDL');
+		#say "Data Type (pdl) ".$pdl->type;
+		$self->{PDL}=$pdl->copy;
+		#say "Data Type (pdl) ".$self->type;
+		$self->set_field ('datatype' , $_map_pdltypes{$self->type});
+		#say ("What's going on? ".$self->get_field ('datatype' ), $_map_pdltypes{$self->{PDL}->type});
+		$self->set_field ('bitpix' , $_bitsize{$self->{PDL}->type});
+		$self->set_field ('dim',[$self->{PDL}->ndims,$self->{PDL}->dims]);
 
+		$self->barf ("could not set datatype for ".$pdl->info." (".$pdl->type." ".$self->get_field('datatype'))
+			unless $self->get_field('datatype');
 	}
 	#say "Imag: ".($self->{imag}->info);
-	return $self->{imag};
+	return $self->{PDL};
 }
 
 sub read_hdr {
@@ -236,6 +245,7 @@ sub read_hdr {
 		read $file,my $item,$sizes{$fields{$field}->{type}}*$c;
 		#say ($fields{$field}->{type});
 		next if ($fields{$field}->{type} eq '1');
+		say "$field ,".$fields{$field}->{type};# if ($fields{$field}->{type} eq '1');
 		if ($fields{$field}->{count}>1) {
 			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
 				$self->set_field($field,[unpack ($fields{$field}->{type}.$byte_order.$c,$item)]) ;
@@ -309,9 +319,9 @@ sub write_nii {
 	#say $self->{imag}->info;
 	$self->write_hdr($file);
 	seek ($file,$self->get_field('vox_offset'),0);
-	#say "Curr. pos.: ",tell($file);
+	say "Curr. pos.: ",tell($file);
 	#my $d=Data::Dumper->new (
-	writeflex ($file,$self->img);
+	writeflex ($file,$self);#->img);
 	#say ("Writeflex: ".$d->Dump);
 	#say "Curr. pos.: ",tell($file);
 	#print "bla\n";
@@ -332,6 +342,7 @@ sub read_nii {
 	#say "$dims, @$dims";
 	my $ndims=shift @{$dims};
 	#say "Dims @$dims";
+	say $self->get_field('datatype');
 	my ($type,$i,$j,$k,$l)=@{$_maptypes{$self->get_field('datatype')}};
 	#say "$type,$i,$j,$k,$l";
 	while (!$$dims[-1]) {pop @$dims;} # Remove trailing 0s to avoid 0-length dim in piddle
@@ -490,10 +501,10 @@ my $nii=PDL::IO::Nifti->new; # Creates the object
 $nii->img(rvals(64,32)); # Assigns data
 
 # The following lines illustrate how to access PDLs 
-$nii->img->()*=3000; 
-$nii->img->(0,).=0;
-say avg $nii->img;
-say $nii->img->info;
+$nii*=3000; 
+$nii(0,).=0;
+say avg $nii;
+say $nii->info;
 
 # Now we write out the data
 $nii->write_nii($file);
@@ -504,8 +515,8 @@ close $file;
 open my $file,$name or die "Failed to read $name\n";
 my $ni2=$nii->new;
 $ni2->read_nii($file);
-say $ni2->img->info; 
-$ni2->img->(,,0)->squeeze->wpic('nii.png');
+say $ni2->info; 
+$ni2->(,,0)->squeeze->wpic('nii.png');
 
 
 =head1 DESCRIPTION
@@ -526,12 +537,8 @@ Initialize the object. Calls img if passed an argument.
 
 =head2 img
 
-This method should be called whenever you want to access your piddle. The first argument will replace your piddle with whatever it holds. It returns the piddle. This method should be used whenever you need to access your data. 
+This method should be called whenever you want to explicitly access your piddle only. The first argument will replace your piddle with whatever it holds. It returns the piddle. This should be used if you want to also update the essential metadata like dimensions and datatype in the Nifti header.
 
-$nii->read_nii($file); 
-my $pdl=$nii->img; 
-
-can be used to load an image into $pdl. 
 
 =head2 read_nii
 
@@ -560,7 +567,9 @@ so far only used/tested internally, but may be useful. They pack and write or re
 
 At the moment, read_nii and write_nii have only been tested for native PDL datatypes.
 
-In case you get failures from read_nii/write_nii, try passing either a reference to an open filehandle or a filename. It tries to guess what argument has been given, but I'm not sure if it covers all cases. So far it was only tested on linux.
+In case you get failures from read_nii/write_nii, try passing either a
+reference to an open filehandle or a filename. It tries to guess what argument
+has been given, but I'm not sure if it covers all cases.
 
 Tests are still rudimentary, for the moment, noly reading is tested for.
 
