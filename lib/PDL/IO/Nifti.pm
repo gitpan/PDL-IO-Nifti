@@ -19,7 +19,7 @@ use strict;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
 my $byte_order='';
-our $VERSION='0.71';
+our $VERSION='0.72';
 # define hash;
 my %sizes=(
 	'c'=>1,
@@ -142,18 +142,18 @@ sub new {
 	my $class = ref($invocant) || $invocant;
 	my $self=\%fields;
 	bless $self,$class;
-	for my $field (keys %fields) {
-		#say $field;
+	for my $field (sort (keys %$self)) {
+#		say "$field $self->{$field}";
 		next if ($field =~/PDL|force/); # list of special parameters.
-		$_farray[$fields{$field}->{nr}]=$field;
+		$_farray[$$self{$field}->{nr}]=$field;
 	}
 	my $obj=shift;
 	#if ($obj) { 
-		if (eval {$obj->nelem}) { # a piddle!
-			#print "assigning piddle ";
+		if (eval {$obj->isa('PDL')}) { # a piddle!
+			print "assigning piddle \n";
 			$self->img($obj) ; # loads image into imag.
 		} elsif (-f $obj) { # a valid file name !
-#			#print "opening file $obj";
+			print "opening file $obj\n";
 #			open my $file,$obj  or die "$obj cannot be read\n";
 			$self->read_nii($obj);
 		} 	 
@@ -169,36 +169,36 @@ sub set_field {
 	my $val=shift; # either a scalar, or a arrayref when setting a list-like value. 
 	my $count=shift; # index if list values are to be set
 	#say "() setting $field to $val! ($count)";
-	if ($fields{$field}->{count}) {
-		warn "This field $field has only ".$fields{$field}->{count}."elements! 
+	if ($$self{$field}->{count}) {
+		warn "This field $field has only ".$$self{$field}->{count}."elements! 
 			Your assignment will be (partially) lost!"
-			if (($fields{$field}->{count}<=$count and $count) or ($fields{$field}->{count}<=$#{$val}));
+			if (($$self{$field}->{count}<=$count and $count) or ($$self{$field}->{count}<=$#{$val}));
 		if (defined $count) {
-			$fields{$field}->{val}[$count]=$val;
+			$$self{$field}->{val}[$count]=$val;
 		} else {
-			$fields{field}->{val}->[$fields{$field}->{count}]+=0;
-			$fields{$field}->{val}=$val; # 
+			$$self{$field}->{val}->[$$self{$field}->{count}]+=0;
+			$$self{$field}->{val}=$val; # 
 		}
 	} else {
-	warn "This field $field has only ".$fields{$field}->{count}."elements! Your assignment will be (partially) lost!"
+	warn "This field $field has only ".$$self{$field}->{count}."elements! Your assignment will be (partially) lost!"
 		if $count;
-		$fields{$field}->{val}=$val;
+		$$self{$field}->{val}=$val;
 	}
 }
 
 sub get_field {		# sets a field in the header.
 	my $self=shift;
 	my $field=shift;
-	return \%fields unless $field; # You wanted all of it!!!
+	return $self unless $field; # You wanted all of it!!!
 	#$field=$self->n_hdr{$field};
-	#print "fields used are ".@{keys %fields} unless defined $field;
+	#print "fields used are ".@{keys %$self} unless defined $field;
 	#my $val=shift;
 	my $count=shift;
 	if ($count) {
-		return $fields{$field}->{val}[$count];
+		return $$self{$field}->{val}[$count];
 	} else {
 		#say "$field: Array :",$self->{$field}->{val};
-		return $fields{$field}->{val}; # this can be a list if count>0!
+		return $$self{$field}->{val}; # this can be a list if count>0!
 	}
 }
 
@@ -235,33 +235,33 @@ sub read_hdr {
 	$o=unpack 's',$o;
 	die "No dimenison info $o" unless $o;
 	$byte_order='>' if ($o>8);
-	print "Dims: $o, byte order string: $byte_order\n";
+	print "Dims: $o, byte order string: '$byte_order'\n";
 	#my %nifti=%template_nifti_header;
 	#read $file,$str,352;
 	my $pos=0;
 	for my $field (@_farray) {
 		#my $field=$_farray[$i];
-		my $c=int($fields{$field}->{count}||1)*($fields{$field}->{length}||1); # field counter in pack string
-		read $file,my $item,$sizes{$fields{$field}->{type}}*$c;
-		#say ($fields{$field}->{type});
-		next if ($fields{$field}->{type} eq '1');
-		#say "$field ,".$fields{$field}->{type};# if ($fields{$field}->{type} eq '1');
-		if ($fields{$field}->{count}>1) {
-			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
-				$self->set_field($field,[unpack ($fields{$field}->{type}.$byte_order.$c,$item)]) ;
+		my $c=int($$self{$field}->{count}||1)*($$self{$field}->{length}||1); # field counter in pack string
+		read $file,my $item,$sizes{$$self{$field}->{type}}*$c;
+		#say ($$self{$field}->{type});
+		next if ($$self{$field}->{type} eq '1');
+		#say "$field ,".$$self{$field}->{type};# if ($$self{$field}->{type} eq '1');
+		if ($$self{$field}->{count}>1) {
+			if ($$self{$field}->{type} =~ m/[sSlLqQfF]/) {
+				$self->set_field($field,[unpack ($$self{$field}->{type}.$byte_order.$c,$item)]) ;
 		#say $pos," Field $field size $c: $item: ",unpack($self->{$field}->{type}.$c,$item)," ",$self->get_field($field);
 			} else {
-				$self->set_field($field,[unpack ($fields{$field}->{type}.$c,$item)]) ;
+				$self->set_field($field,[unpack ($$self{$field}->{type}.$c,$item)]) ;
 			}
 		} else {
-			if ($fields{$field}->{type} =~ m/[sSlLqQfF]/) {
-				$self->set_field($field,unpack ($fields{$field}->{type}.$byte_order.$c,$item));
+			if ($$self{$field}->{type} =~ m/[sSlLqQfF]/) {
+				$self->set_field($field,unpack ($$self{$field}->{type}.$byte_order.$c,$item));
 		#say $pos," Field $field size $c: $item: ",unpack($self->{$field}->{type}.$c,$item)," ",$self->get_field($field);
 			} else {
-				$self->set_field($field,unpack ($fields{$field}->{type}.$c,$item)) ;
+				$self->set_field($field,unpack ($$self{$field}->{type}.$c,$item)) ;
 			}
 		}
-		$pos+=$c*$sizes{$fields{$field}->{type}};
+		$pos+=$c*$sizes{$$self{$field}->{type}};
 		
 	}
 	#say $pos;
@@ -282,13 +282,13 @@ sub write_hdr {
 		#next if ($field eq 'imag');
 		#say "Field "%{$field};
 		#say "$field , ",$self->get_field($field) ;#->{$field}->{type}; 
-		my $c=int($fields{$field}->{count}||$fields{$field}->{length}||1); # field counter in pack string
-		#say unpack 'a4',pack ($fields{$field}->{type}.$c,$fields{$field}->{val}) if ($field eq 'magic');
+		my $c=int($$self{$field}->{count}||$$self{$field}->{length}||1); # field counter in pack string
+		#say unpack 'a4',pack ($$self{$field}->{type}.$c,$$self{$field}->{val}) if ($field eq 'magic');
 		#say unpack 'a4',pack 'a4','n+1';
-		unless ( $fields{$field}->{count} > 1 ) {
-			$pstring.=pack ( $fields{$field}->{type}.$c,$fields{$field}->{val}); 
+		unless ( $$self{$field}->{count} > 1 ) {
+			$pstring.=pack ( $$self{$field}->{type}.$c,$$self{$field}->{val}); 
 		} else {
-			$pstring.=pack ( $fields{$field}->{type}.$c,@{$fields{$field}->{val}}); 
+			$pstring.=pack ( $$self{$field}->{type}.$c,@{$$self{$field}->{val}}); 
 		}
 	}
 	#say "dims: ",@{$self->get_field('dim')};
@@ -357,7 +357,7 @@ sub read_nii {
 		}
 	} elsif ($j>=1) { # a remapping is necessary
 		#print "We convert now ! ",$self->get_field('datatype')."\n";
-		die "This conversion is not possible without data loss\n" if ($j==2 and !$fields{force});
+		die "This conversion is not possible without data loss\n" if ($j==2 and !$$self{force});
 		my $d=pdl(@$dims);
 		my $buf=max $d; # Buffer
 		my $its=prod $d/$buf; # iterations
