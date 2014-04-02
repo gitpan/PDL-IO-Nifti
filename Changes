@@ -1,5 +1,9 @@
 Revision history for Perl module PDL::IO::Nifti
 
+0.73 	2014-04-02
+
+    *	added 'ExtUtils::F77' as dependency, based on cpan-testers
+
 0.72	2014-03-31
 
     *	fixed a typo, causing sometimes problems in repeated use

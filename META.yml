@@ -18,6 +18,7 @@ no_index:
     - t
     - inc
 requires:
+  ExtUtils::F77: 0
   PDL: 0
   perl: 0
-version: 0.72
+version: 0.73

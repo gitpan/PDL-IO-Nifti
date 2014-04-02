@@ -20,7 +20,8 @@ WriteMakefile(
     PREREQ_PM => {
         #'ABC'              => 1.6,
         #'Foo::Bar::Module' => 5.0401,
-	'PDL'=>0, #2.004,
+	'PDL'=> 0, #2.004,
+	'ExtUtils::F77'	=> '0',
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'PDL-IO-Nifti-*' },

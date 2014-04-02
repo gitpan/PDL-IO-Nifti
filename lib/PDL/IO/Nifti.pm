@@ -19,7 +19,7 @@ use strict;
 my $template='ic10c18isCCs8fffssssf8fffsccffffiic80c24ssfffffff4f4f4c16c4'; #see nifti1.h
 
 my $byte_order='';
-our $VERSION='0.72';
+our $VERSION='0.73';
 # define hash;
 my %sizes=(
 	'c'=>1,
